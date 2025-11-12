@@ -6,12 +6,15 @@ from ollama import AsyncClient
 
 from config import SYSTEM_PROMPT, MAX_CONTEXT, OLLAMA_HOST, OLLAMA_MODEL
 from logs import info, warn, error
+from dotenv import load_dotenv
 
 import pytesseract
 import asyncio
 import sys
 import os
 import re
+
+load_dotenv()
 
 client = AsyncClient(host=OLLAMA_HOST)
 

@@ -1,0 +1,5 @@
+aiogram==3.22.0
+ollama==0.6.0
+pillow==12.0.0
+pytesseract==0.3.13
+python-dotenv==1.2.1
