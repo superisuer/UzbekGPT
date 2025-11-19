@@ -32,7 +32,7 @@ user_contexts = {}
 def escape_markdown_v2(text):
     return re.sub(r'([_\[\]()~>#+\-=|{}.!])', r'\\\1', text)
 
-@dp.message(Command("/start"))
+@dp.message(Command("start"))
 async def start_handler(message: types.Message):
     user_id = message.from_user.id
     user_contexts[user_id] = []
@@ -49,8 +49,8 @@ async def start_handler(message: types.Message):
         error(f"Error in sending message: {e}")
         user_contexts[user_id] = []
 
-@dp.message(Command("/clear"))
-async def start_handler(message: types.Message):
+@dp.message(Command("clear"))
+async def clear_handler(message: types.Message):
     user_id = message.from_user.id
     user_contexts[user_id] = []
     try:
@@ -64,7 +64,7 @@ async def start_handler(message: types.Message):
         user_contexts[user_id] = []
 
 @dp.message()
-async def start_handler(message: types.Message):
+async def message_handler(message: types.Message):
     user_id = message.from_user.id
     prompt = ""
 
@@ -160,7 +160,7 @@ async def start_handler(message: types.Message):
 @dp.callback_query(lambda c: c.data == "start")
 async def start_msg(call: types.CallbackQuery):    
     await call.reply()
-    await call.message.reply("я рад чтоб ваш заинтересовать✅ теперь напишите мне любое сообщение и я отвечу очень быстро!!✅✅✅")
+    await call.message.answer("я рад чтоб ваш заинтересовать✅ теперь напишите мне любое сообщение и я отвечу очень быстро!!✅✅✅")
     await call.message.delete()  
 
 async def main():
