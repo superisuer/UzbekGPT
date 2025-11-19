@@ -1,6 +1,7 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, LabeledPrice, PreCheckoutQuery
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.exceptions import TelegramForbiddenError
 from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
 from PIL import Image, ImageFilter, ImageOps
 from ollama import AsyncClient
 
@@ -31,41 +32,40 @@ user_contexts = {}
 def escape_markdown_v2(text):
     return re.sub(r'([_\[\]()~>#+\-=|{}.!])', r'\\\1', text)
 
+@dp.message(Command("/start"))
+async def start_handler(message: types.Message):
+    user_id = message.from_user.id
+    user_contexts[user_id] = []
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="Начать", callback_data="start")]]
+    )
+    try:
+        await message.answer("Привет, я УЗБекГПТ✅ готов помочь. Что ты хочешь сделать?✅", reply_markup=keyboard)
+    except TelegramForbiddenError as e:
+        error(f"Error in sending message: {e}")
+        user_contexts[user_id] = []
+    except Exception as e:
+        await message.reply("⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст.")
+        error(f"Error in sending message: {e}")
+        user_contexts[user_id] = []
+
+@dp.message(Command("/clear"))
+async def start_handler(message: types.Message):
+    user_id = message.from_user.id
+    user_contexts[user_id] = []
+    try:
+        await message.reply("контекст очичен✅")
+    except TelegramForbiddenError as e:
+        error(f"Error in sending message: {e}")
+        user_contexts[user_id] = []
+    except Exception as e:
+        await message.reply("⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст.")
+        error(f"Error in sending message: {e}")
+        user_contexts[user_id] = []
+
 @dp.message()
 async def start_handler(message: types.Message):
     user_id = message.from_user.id
-
-    if message.text == "/clear":
-        user_contexts[user_id] = []
-        try:
-            await message.answer("контекст очичен✅")
-        except TelegramForbiddenError as e:
-            error(f"Error in sending message: {e}")
-            user_contexts[user_id] = []
-        except Exception as e:
-            await message.answer("⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст.")
-            error(f"Error in sending message: {e}")
-            user_contexts[user_id] = []
-
-        return
-
-    if message.text == "/start":
-        user_contexts[user_id] = []
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="Начать", callback_data="start")]]
-        )
-        try:
-            await message.answer("Привет, я УЗБекГПТ✅ готов помочь. Что ты хочешь сделать?✅", reply_markup=keyboard)
-        except TelegramForbiddenError as e:
-            error(f"Error in sending message: {e}")
-            user_contexts[user_id] = []
-        except Exception as e:
-            await message.answer("⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст.")
-            error(f"Error in sending message: {e}")
-            user_contexts[user_id] = []
-        return
-
-
     prompt = ""
 
     if message.text:
@@ -90,9 +90,9 @@ async def start_handler(message: types.Message):
 
 
         if prompt and text_img:
-            prompt = f"{prompt}\n<приложено фото {path}>{text_img}</image>"
+            prompt = f"{prompt}\n<фото {path}>{text_img}</image>"
         elif text_img:
-            prompt = f"приложено фото {path}>{text_img}</image>"
+            prompt = f"<фото{path}>{text_img}/>"
 
     prompt = prompt[:1000]
     
@@ -109,7 +109,7 @@ async def start_handler(message: types.Message):
         user_contexts[user_id] = []
         return
     except Exception as e:
-        await message.answer("⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст.")
+        await message.reply("⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст.")
         error(f"Error in sending chat action: {e}")
         user_contexts[user_id] = []
         return
@@ -129,13 +129,13 @@ async def start_handler(message: types.Message):
     except asyncio.TimeoutError:
         task.cancel()
         warn("The AI was unable to respond for more than 50 seconds")
-        await message.answer("⚠️отказ! наш узбек заснул на клавиатуре и не отвечал вам более 50 сек! чтобы очистить контекст и сменить узбека напиши /clear ✅")
+        await message.reply("⚠️отказ! наш узбек заснул на клавиатуре и не отвечал вам более 50 сек! чтобы очистить контекст и сменить узбека напиши /clear ✅")
         return
 
     except Exception as e:
         task.cancel()
         error(f"Ollama Error: {e}")
-        await message.answer("⚠️отказ! произошла ошибка при выполнении! контекст очищен ✅")
+        await message.reply("⚠️отказ! произошла ошибка при выполнении! контекст очищен ✅")
         user_contexts[user_id] = []
         return
 
@@ -148,21 +148,19 @@ async def start_handler(message: types.Message):
     user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
 
     try:
-        await message.answer(result, parse_mode="MarkdownV2")
+        await message.reply(result, parse_mode="MarkdownV2")
     except TelegramForbiddenError as e:
         error(f"Error in sending message: {e}")
         user_contexts[user_id] = []
     except Exception as e:
-        await message.answer("⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст.")
+        await message.reply("⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст.")
         error(f"Error in sending message: {e}")
         user_contexts[user_id] = []
 
-
-
 @dp.callback_query(lambda c: c.data == "start")
 async def start_msg(call: types.CallbackQuery):    
-    await call.answer()
-    await call.message.answer("я рад чтоб ваш заинтересовать✅ теперь напишите мне любое сообщение и я отвечу очень быстро!!✅✅✅")
+    await call.reply()
+    await call.message.reply("я рад чтоб ваш заинтересовать✅ теперь напишите мне любое сообщение и я отвечу очень быстро!!✅✅✅")
     await call.message.delete()  
 
 async def main():
