@@ -1,7 +1,8 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.exceptions import TelegramForbiddenError
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.enums import ChatAction, ChatType
+from pyrogram.errors import Forbidden
+from pyrogram import Client, filters
+
 from PIL import Image, ImageFilter, ImageOps
 from ollama import AsyncClient
 
@@ -17,45 +18,70 @@ import re
 
 load_dotenv()
 
-client = AsyncClient(host=OLLAMA_HOST)
+ollama_client = AsyncClient(host=OLLAMA_HOST)
 
 API_TOKEN = os.getenv("API_TOKEN")
 if not API_TOKEN:
     error("API_TOKEN is not set")
     sys.exit(1)
 
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher()
+API_ID = os.getenv("API_ID")
+if not API_ID:
+    error("API_ID is not set")
+    sys.exit(1)
+
+API_HASH = os.getenv("API_HASH")
+if not API_HASH:
+    error("API_HASH is not set")
+    sys.exit(1)
+
+
+app = Client(
+    "uzbekgpt",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=API_TOKEN
+)
 
 user_contexts = {}
 
-def escape_markdown_v2(text):
-    return re.sub(r'([_\[\]()~>#+\-=|{}.!])', r'\\\1', text)
-
-@dp.message(Command("start"))
-async def start_handler(message: types.Message):
+@app.on_message(filters.command("start") & filters.private)
+async def start_handler(client: Client, message: Message):
     user_id = message.from_user.id
     user_contexts[user_id] = []
+
     keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="Начать", callback_data="start")]]
+        [[InlineKeyboardButton("Начать", callback_data="start")]]
     )
+
     try:
-        await message.answer("Привет, я УЗБекГПТ✅ готов помочь. Что ты хочешь сделать?✅", reply_markup=keyboard)
-    except TelegramForbiddenError as e:
-        error(f"Error in sending message: {e}")
+        await message.reply(
+            "Привет, я УЗБекГПТ✅ готов помочь. Что ты хочешь сделать?✅",
+            reply_markup=keyboard
+        )
+    except Forbidden as e:
+        print(f"Error in sending message: {e}")
         user_contexts[user_id] = []
     except Exception as e:
         await message.reply("⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст.")
-        error(f"Error in sending message: {e}")
+        print(f"Error in sending message: {e}")
         user_contexts[user_id] = []
 
-@dp.message(Command("clear"))
-async def clear_handler(message: types.Message):
+@app.on_callback_query(filters.regex("^start$"))
+async def start_callback(client, callback_query): 
+    await callback_query.message.edit_text(
+        "✅я рад что вас заинтересовать✅✅ а теперь напише любое сообщение и свободный узбек вам ответит✅"
+    )
+    await callback_query.answer() 
+
+
+@app.on_message(filters.command("clear") & filters.incoming)
+async def clear_handler(client: Client, message: Message):
     user_id = message.from_user.id
     user_contexts[user_id] = []
     try:
         await message.reply("контекст очичен✅")
-    except TelegramForbiddenError as e:
+    except Forbidden as e:
         error(f"Error in sending message: {e}")
         user_contexts[user_id] = []
     except Exception as e:
@@ -63,9 +89,19 @@ async def clear_handler(message: types.Message):
         error(f"Error in sending message: {e}")
         user_contexts[user_id] = []
 
-@dp.message()
-async def message_handler(message: types.Message):
+@app.on_message(filters.text)
+async def text_handler(client, message):
     user_id = message.from_user.id
+    if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:        
+        text_lower = (message.text or "").lower()
+        is_reply_to_bot = (message.reply_to_message and message.reply_to_message.from_user and message.reply_to_message.from_user.is_bot)
+        
+        mentions_bot = any(e.type == "mention" for e in (message.entities or []))
+        has_uzbek = "узбек" in text_lower
+        # print(is_reply_to_bot, mentions_bot, has_uzbek)
+        if not (is_reply_to_bot or mentions_bot or has_uzbek):
+            return
+
     prompt = ""
 
     if message.text:
@@ -75,25 +111,28 @@ async def message_handler(message: types.Message):
 
     if message.photo:
         photo = message.photo[-1]
-        file = await message.bot.get_file(photo.file_id)
-        path = f"{message.message_id}.jpg"
-        await message.bot.download_file(file.file_path, path)
-
+    
+        path = f"{message.id}.jpg"
+        await client.download_media(photo.file_id, file_name=path)
+    
         img = Image.open(path)
-
         img = img.convert("L")
         img = img.point(lambda x: 0 if x < 140 else 255, "1")
+    
         config = r"--oem 3 --psm 6"
         text_img = pytesseract.image_to_string(img, lang="rus+eng", config=config)
-
+    
         os.remove(path)
-
-
+    
         if prompt and text_img:
             prompt = f"{prompt}\n<фото {path}>{text_img}</image>"
         elif text_img:
-            prompt = f"<фото{path}>{text_img}/>"
-
+            prompt = f"<фото {path}>{text_img}/>"
+    
+    if message.reply_to_message and message.reply_to_message.text:
+        replied_text = message.reply_to_message.text
+        prompt = f"<цитата>{replied_text}</цитата>{prompt}"
+    
     prompt = prompt[:1000]
     
     if user_id not in user_contexts:
@@ -103,8 +142,11 @@ async def message_handler(message: types.Message):
     user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
 
     try:
-        await message.bot.send_chat_action(message.chat.id, "typing")
-    except TelegramForbiddenError as e:
+        await client.send_chat_action(
+            chat_id=message.chat.id,
+            action=ChatAction.TYPING
+        )
+    except Forbidden as e:
         error(f"Error in sending chat action: {e}")
         user_contexts[user_id] = []
         return
@@ -117,9 +159,10 @@ async def message_handler(message: types.Message):
     messages = [{"role": "system", "content": SYSTEM_PROMPT}] + user_contexts[user_id]
 
     task = asyncio.create_task(
-        client.chat(
+        ollama_client.chat(
             model=OLLAMA_MODEL,
-            messages=messages
+            messages=messages,
+            think=False
         )
     )
 
@@ -142,14 +185,12 @@ async def message_handler(message: types.Message):
 
     text = getattr(response.message, "content", None) or getattr(response, "content", "")
 
-    result = escape_markdown_v2(text)
-
     user_contexts[user_id].append({"role": "assistant", "content": text})
     user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
 
     try:
-        await message.reply(result, parse_mode="MarkdownV2")
-    except TelegramForbiddenError as e:
+        await message.reply(text)
+    except Forbidden as e:
         error(f"Error in sending message: {e}")
         user_contexts[user_id] = []
     except Exception as e:
@@ -157,14 +198,4 @@ async def message_handler(message: types.Message):
         error(f"Error in sending message: {e}")
         user_contexts[user_id] = []
 
-@dp.callback_query(lambda c: c.data == "start")
-async def start_msg(call: types.CallbackQuery):    
-    await call.reply()
-    await call.message.answer("я рад чтоб ваш заинтересовать✅ теперь напишите мне любое сообщение и я отвечу очень быстро!!✅✅✅")
-    await call.message.delete()  
-
-async def main():
-    info("Starting bot...")
-    await dp.start_polling(bot)
-
-asyncio.run(main())
+app.run()
