@@ -3,14 +3,14 @@ from pyrogram.enums import ChatAction, ChatType
 from pyrogram.errors import Forbidden
 from pyrogram import Client, filters
 
-from PIL import Image, ImageFilter, ImageOps
+#from PIL import Image, ImageFilter, ImageOps
 from ollama import AsyncClient
 
 from config import SYSTEM_PROMPT, MAX_CONTEXT, OLLAMA_HOST, OLLAMA_MODEL
 from logs import info, warn, error
 from dotenv import load_dotenv
 
-import pytesseract
+#import pytesseract
 import asyncio
 import sys
 import os
@@ -21,8 +21,9 @@ load_dotenv()
 ollama_client = AsyncClient(host=OLLAMA_HOST)
 
 API_TOKEN = os.getenv("API_TOKEN")
-API_HASH = os.getenv("API_HASH")
 API_ID = os.getenv("API_ID")
+API_HASH = os.getenv("API_HASH")
+
 if not API_TOKEN:
     error("API_TOKEN не установлен. Создайте бота в @BotFather и установите токен бота.")
     sys.exit(1)
@@ -145,40 +146,97 @@ async def text_handler(client, message):
         ollama_client.chat(
             model=OLLAMA_MODEL,
             messages=messages,
-            think=False
+            
         )
     )
 
     try:
-        response = await asyncio.wait_for(task, timeout=50)
-
+	    response = await asyncio.wait_for(task, timeout=50)
     except asyncio.TimeoutError:
-        task.cancel()
-        warn("ЛЛМка не смогла ответить больше 50 секунд!!1!1")
-        await message.reply("⚠️к сожалению узбекгпт не придумал ответ за 50 секунд. отправьте сообщение ещё раз или очистите контекст командой /clear")
-        return
-
+	    task.cancel()
+	    warn("ЛЛМка не смогла ответить больше 50 секунд!!1!1")
+	    await message.reply("⚠️к сожалению узбекгпт не придумал ответ за 50 секунд. отправьте сообщение ещё раз или очистите контекст командой /clear")
+	    return
     except Exception as e:
-        task.cancel()
-        error(e)
-        await message.reply("⚠️отказ! произошла ошибка при выполнении! контекст очищен")
-        user_contexts[user_id] = []
-        return
-
-
-    text = getattr(response.message, "content", None) or getattr(response, "content", "")
-
+	    task.cancel()
+	    error(e)
+	    await message.reply("⚠️отказ! произошла ошибка при выполнении! контекст очищен")
+	    user_contexts[user_id] = []
+	    return
+    
+    text=response['message']['content']
+	
     user_contexts[user_id].append({"role": "assistant", "content": text})
     user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
+    
+    try:
+	    await message.reply(text)
+    except Forbidden as e:
+	    error(e)
+	    user_contexts[user_id] = []
+    except Exception as e:
+	    await message.reply("⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст.")
+	    error(e)
+	    user_contexts[user_id] = []
+
+from pyrogram.types import (
+    InlineQueryResultArticle,
+    InputTextMessageContent,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton
+)
+
+@app.on_inline_query()
+async def inline_handler(client, inline_query):
+    user_id = inline_query.from_user.id
+    prompt = inline_query.query
+    
+    if user_id not in user_contexts:
+        user_contexts[user_id] = []
+
+    user_contexts[user_id].append({"role": "user", "content": prompt})
+    user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + user_contexts[user_id]
+
+    task = asyncio.create_task(
+        ollama_client.chat(
+            model=OLLAMA_MODEL,
+            messages=messages,
+            
+        )
+    )
 
     try:
-        await message.reply(text)
-    except Forbidden as e:
-        error(e)
-        user_contexts[user_id] = []
+	    response = await asyncio.wait_for(task, timeout=50)
+    except asyncio.TimeoutError:
+	    task.cancel()
+	    warn("ЛЛМка не смогла ответить больше 50 секунд!!1!1")
+	    
+	    return
     except Exception as e:
-        await message.reply("⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст.")
-        error(e)
-        user_contexts[user_id] = []
+	    task.cancel()
+	    error(e)
+	    user_contexts[user_id] = []
+	    return
+    
+    text=response['message']['content']
+    
+    result = InlineQueryResultArticle(
+        id="1",  
+        title="ответ узбекгпт",
+        description=text,
+        input_message_content=InputTextMessageContent(
+            message_text=text,
+
+        ),
+        
+    )
+    
+    await inline_query.answer(
+        results=[result],
+        cache_time=300,
+        is_personal=True
+    )
 
 app.run()
+	
