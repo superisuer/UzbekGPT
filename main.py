@@ -49,8 +49,10 @@ app = Client(
 
 user_contexts = {}
 
-@app.on_message(filters.command("start") & filters.private)
+@app.on_message(filters.command("start"))
 async def start_handler(client: Client, message: Message):
+    if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+        return
     if message.sender_chat:
         user_id = message.sender_chat.id
     else:
