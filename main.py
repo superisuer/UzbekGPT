@@ -201,36 +201,9 @@ async def text_handler(client, message):
 @app.on_inline_query()
 async def inline_handler(client, inline_query):
     user_id = inline_query.from_user.id
-    prompt = inline_query.query
+    prompt = inline_query.query[:MAX_PROMPT]
     
-    if user_id not in user_contexts:
-        user_contexts[user_id] = []
-
-    user_contexts[user_id].append({"role": "user", "content": prompt})
-    user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + user_contexts[user_id]
-
-    task = asyncio.create_task(
-        ollama_client.chat(
-            model=OLLAMA_MODEL,
-            messages=messages
-        )
-    )
-
-    try:
-	    response = await asyncio.wait_for(task, timeout=50)
-    except asyncio.TimeoutError:
-	    task.cancel()
-	    warn("ЛЛМка не смогла ответить больше 50 секунд!!1!1")
-	    
-	    return
-    except Exception as e:
-	    task.cancel()
-	    error(e)
-	    user_contexts[user_id] = []
-	    return
-    
-    text=response['message']['content']
+    text = await generate(prompt, user_id)
     
     result = InlineQueryResultArticle(
         id="1",  
