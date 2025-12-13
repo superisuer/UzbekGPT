@@ -1,16 +1,19 @@
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.enums import ChatAction, ChatType
 from pyrogram.errors import Forbidden
 from pyrogram import Client, filters
-
-#from PIL import Image, ImageFilter, ImageOps
+from pyrogram.types import (
+    InlineQueryResultArticle,
+    InputTextMessageContent,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    Message
+)
 from ollama import AsyncClient
 
 from config import SYSTEM_PROMPT, MAX_CONTEXT, OLLAMA_HOST, OLLAMA_MODEL
 from logs import info, warn, error
 from dotenv import load_dotenv
 
-#import pytesseract
 import asyncio
 import sys
 import os
@@ -107,7 +110,6 @@ async def text_handler(client, message):
         is_reply_to_bot = (message.reply_to_message and message.reply_to_message.from_user and message.reply_to_message.from_user.is_bot)
         mentions_bot = me.username in message.text
         has_uzbek = "узбек" in message.text.lower()
-        # print(is_reply_to_bot, mentions_bot, has_uzbek)
         if not (is_reply_to_bot or mentions_bot or has_uzbek):
             return
 
@@ -145,8 +147,7 @@ async def text_handler(client, message):
     task = asyncio.create_task(
         ollama_client.chat(
             model=OLLAMA_MODEL,
-            messages=messages,
-            
+            messages=messages
         )
     )
 
@@ -179,13 +180,6 @@ async def text_handler(client, message):
 	    error(e)
 	    user_contexts[user_id] = []
 
-from pyrogram.types import (
-    InlineQueryResultArticle,
-    InputTextMessageContent,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton
-)
-
 @app.on_inline_query()
 async def inline_handler(client, inline_query):
     user_id = inline_query.from_user.id
@@ -201,8 +195,7 @@ async def inline_handler(client, inline_query):
     task = asyncio.create_task(
         ollama_client.chat(
             model=OLLAMA_MODEL,
-            messages=messages,
-            
+            messages=messages
         )
     )
 
@@ -226,8 +219,7 @@ async def inline_handler(client, inline_query):
         title="ответ узбекгпт",
         description=text,
         input_message_content=InputTextMessageContent(
-            message_text=text,
-
+            message_text=text
         ),
         
     )
