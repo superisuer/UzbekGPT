@@ -48,7 +48,52 @@ app = Client(
 )
 
 user_contexts = {}
+    
+async def generate(prompt, user_id):
+    if user_id not in user_contexts:
+        user_contexts[user_id] = []
 
+    user_contexts[user_id].append({"role": "user", "content": prompt})
+    user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
+
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + user_contexts[user_id]
+
+    task = asyncio.create_task(
+        ollama_client.chat(
+            model=OLLAMA_MODEL,
+            messages=messages
+        )
+    )
+
+    try:
+        response = await asyncio.wait_for(task, timeout=50)
+    except asyncio.TimeoutError:
+        task.cancel()
+        warn("ЛЛМка не смогла ответить больше 50 секунд!!1!1")
+        return "⚠️к сожалению узбекгпт не придумал ответ за 50 секунд. отправьте сообщение ещё раз или очистите контекст командой /clear"
+    except Exception as e:
+        task.cancel()
+        error(e)
+        user_contexts[user_id] = []
+        return "⚠️отказ! произошла ошибка при выполнении! контекст очищен"
+	    
+	    
+    
+    text = response['message']['content']
+	
+    user_contexts[user_id].append({"role": "assistant", "content": text})
+    user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
+    
+    try:
+	    return text
+    except Forbidden as e:
+	    error(e)
+	    user_contexts[user_id] = []
+    except Exception as e:
+	    return "⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст."
+	    error(e)
+	    user_contexts[user_id] = []
+ 
 @app.on_message(filters.command("start"))
 async def start_handler(client: Client, message: Message):
     if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
@@ -108,6 +153,7 @@ async def text_handler(client, message):
         user_id = message.sender_chat.id
     else:
         user_id = message.from_user.id
+        
     if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:        
         me = await client.get_me()
         is_reply_to_bot = (message.reply_to_message and message.reply_to_message.from_user and message.reply_to_message.from_user.is_bot)
@@ -116,20 +162,22 @@ async def text_handler(client, message):
         if not (is_reply_to_bot or mentions_bot or has_uzbek):
             return
 
-    prompt = message.text
-
-    if message.reply_to_message and message.reply_to_message.text:
-        replied_text = message.reply_to_message.text
-        prompt = f"<цитата>{replied_text}</цитата>{prompt}"
+    replied = message.reply_to_message
     
+    prompt = ""
+    
+    if replied and replied.document:
+        file_bytes = await replied.download(in_memory=True)
+        file_content = file_bytes.getvalue().decode('utf-8', errors='ignore')
+        prompt = f"<файл>{file_content}</файл>{message.text}"
+    elif replied and replied.text:
+        replied_text = message.reply_to_message.text
+        prompt = f"<цитата>{replied_text}</цитата>{message.text}"
+    else:
+        prompt = message.text
+        
     prompt = prompt[:MAX_PROMPT]
     
-    if user_id not in user_contexts:
-        user_contexts[user_id] = []
-
-    user_contexts[user_id].append({"role": "user", "content": prompt})
-    user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
-
     try:
         await client.send_chat_action(
             chat_id=message.chat.id,
@@ -144,44 +192,11 @@ async def text_handler(client, message):
         error(e)
         user_contexts[user_id] = []
         return
-
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + user_contexts[user_id]
-
-    task = asyncio.create_task(
-        ollama_client.chat(
-            model=OLLAMA_MODEL,
-            messages=messages
-        )
-    )
-
-    try:
-	    response = await asyncio.wait_for(task, timeout=50)
-    except asyncio.TimeoutError:
-	    task.cancel()
-	    warn("ЛЛМка не смогла ответить больше 50 секунд!!1!1")
-	    await message.reply("⚠️к сожалению узбекгпт не придумал ответ за 50 секунд. отправьте сообщение ещё раз или очистите контекст командой /clear")
-	    return
-    except Exception as e:
-	    task.cancel()
-	    error(e)
-	    await message.reply("⚠️отказ! произошла ошибка при выполнении! контекст очищен")
-	    user_contexts[user_id] = []
-	    return
     
-    text=response['message']['content']
-	
-    user_contexts[user_id].append({"role": "assistant", "content": text})
-    user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
+    result = await generate(prompt, user_id)
     
-    try:
-	    await message.reply(text)
-    except Forbidden as e:
-	    error(e)
-	    user_contexts[user_id] = []
-    except Exception as e:
-	    await message.reply("⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст.")
-	    error(e)
-	    user_contexts[user_id] = []
+    await message.reply(result)
+        
 
 @app.on_inline_query()
 async def inline_handler(client, inline_query):
@@ -233,5 +248,34 @@ async def inline_handler(client, inline_query):
         is_personal=True
     )
 
+@app.on_message(filters.document)
+async def handle_content(client, message):
+    if message.sender_chat:
+        user_id = message.sender_chat.id
+    else:
+        user_id = message.from_user.id
+        
+    if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:        
+        me = await client.get_me()
+        is_reply_to_bot = (message.reply_to_message and message.reply_to_message.from_user and message.reply_to_message.from_user.is_bot)
+        mentions_bot = me.username in message.caption
+        has_uzbek = "узбек" in message.caption.lower()
+        if not (is_reply_to_bot or mentions_bot or has_uzbek):
+            return
+        
+    prompt = ""
+    
+    if message.document:
+        file_bytes = await message.download(in_memory=True)
+        file_content = file_bytes.getvalue().decode('utf-8', errors='ignore')
+        prompt = f"<файл>{file_content}</файл>"
+            
+    if message.caption:        
+        prompt = prompt + "\n" + message.caption
+    
+    result = await generate(prompt, user_id)
+    
+    await message.reply(result)
+    
 app.run()
 	
