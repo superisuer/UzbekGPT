@@ -17,5 +17,6 @@ SYSTEM_PROMPT = """
 """
 
 MAX_CONTEXT = 5
+MAX_PROMPT = 1000
 OLLAMA_MODEL = "gemma3:27b-cloud"
 OLLAMA_HOST = "http://localhost:11434"

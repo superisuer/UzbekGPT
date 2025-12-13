@@ -8,9 +8,10 @@ from pyrogram.types import (
     InlineKeyboardButton,
     Message
 )
+
 from ollama import AsyncClient
 
-from config import SYSTEM_PROMPT, MAX_CONTEXT, OLLAMA_HOST, OLLAMA_MODEL
+from config import SYSTEM_PROMPT, MAX_CONTEXT, MAX_PROMPT, OLLAMA_HOST, OLLAMA_MODEL
 from logs import info, warn, error
 from dotenv import load_dotenv
 
@@ -119,7 +120,7 @@ async def text_handler(client, message):
         replied_text = message.reply_to_message.text
         prompt = f"<цитата>{replied_text}</цитата>{prompt}"
     
-    prompt = prompt[:1000]
+    prompt = prompt[:MAX_PROMPT]
     
     if user_id not in user_contexts:
         user_contexts[user_id] = []
