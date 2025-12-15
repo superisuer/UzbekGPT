@@ -11,7 +11,7 @@ from pyrogram.types import (
 
 from ollama import AsyncClient
 
-from config import SYSTEM_PROMPT, MAX_CONTEXT, MAX_PROMPT, OLLAMA_HOST, OLLAMA_MODEL
+from config import SYSTEM_PROMPT, MAX_CONTEXT, MAX_PROMPT, OLLAMA_HOST, OLLAMA_MODEL, OLLAMA_MODELS
 from logs import info, warn, error
 from dotenv import load_dotenv
 
@@ -48,11 +48,28 @@ app = Client(
 )
 
 user_contexts = {}
-    
+
+import shelve
+
+def set_user_model(user_id, model_name):
+    with shelve.open('models_db') as db:
+        db[str(user_id)] = model_name
+
+def get_user_model(user_id):
+    with shelve.open('models_db') as db:
+        return db.get(str(user_id), OLLAMA_MODEL)
+
 async def generate(prompt, user_id):
     if user_id not in user_contexts:
         user_contexts[user_id] = []
-
+    
+    if get_user_model(user_id) in OLLAMA_MODELS:
+        model = get_user_model(user_id)
+    else:
+        return f"модель `{get_user_model(user_id)}` теперь не доступна. посмотри доступные модели командой /model"
+        
+    # print(user_id)
+    
     user_contexts[user_id].append({"role": "user", "content": prompt})
     user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
 
@@ -60,7 +77,7 @@ async def generate(prompt, user_id):
 
     task = asyncio.create_task(
         ollama_client.chat(
-            model=OLLAMA_MODEL,
+            model=model,
             messages=messages
         )
     )
@@ -129,6 +146,45 @@ async def start_callback(client, callback_query):
     )
     await callback_query.answer() 
 
+
+@app.on_message(filters.command("model"))
+async def model_handler(client: Client, message: Message):
+    if message.sender_chat:
+        user_id = message.sender_chat.id
+    else:
+        user_id = message.from_user.id
+    
+    user_contexts[user_id] = []
+    
+    model = get_user_model(user_id)
+    args = message.text.split()
+    
+    if len(args) == 1:
+        result = "⚡доступные модели:"
+        if len(OLLAMA_MODELS) > 0:
+            for i in OLLAMA_MODELS:
+                if model == i:
+                    result += f"\n✅ `{i}`"
+                else:
+                    result += f"\n– `{i}`"
+        else:
+            result += "_хуй тебе_"
+    else:
+        if args[1] in OLLAMA_MODELS:
+            set_user_model(user_id, args[1])
+            result = f"✅сменили тебе модель на `{args[1]}`"
+        else:
+            result = f"🚫`{args[1]}` даже нет в доступных: /model"
+            
+    try:
+        await message.reply(result)
+    except Forbidden as e:
+        error(e)
+        user_contexts[user_id] = []
+    except Exception as e:
+        await message.reply("⚠️какая-та ошибка случилась")
+        error(e)
+        user_contexts[user_id] = []
 
 @app.on_message(filters.command("clear") & filters.incoming)
 async def clear_handler(client: Client, message: Message):
@@ -251,4 +307,3 @@ async def handle_content(client, message):
     await message.reply(result)
     
 app.run()
-	
