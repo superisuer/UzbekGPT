@@ -2,7 +2,9 @@ from pyrogram.enums import ChatAction, ChatType
 from pyrogram.errors import Forbidden
 from pyrogram import Client, filters
 from pyrogram.types import (
+    ChosenInlineResult,
     InlineQueryResultArticle,
+    InlineQueryResultPhoto,
     InputTextMessageContent,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
@@ -244,7 +246,7 @@ async def text_handler(client, message):
         user_contexts[user_id] = []
         return
     except Exception as e:
-        await message.reply("⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст.")
+        await message.reply("⚠️ узбекгпт не смог ответить вам. он сбросил ваш контекст.")
         error(e)
         user_contexts[user_id] = []
         return
@@ -257,25 +259,29 @@ async def text_handler(client, message):
 @app.on_inline_query()
 async def inline_handler(client, inline_query):
     user_id = inline_query.from_user.id
-    prompt = inline_query.query[:MAX_PROMPT]
     
-    text = await generate(prompt, user_id)
+    button = InlineKeyboardButton(text="жди", callback_data="pasholnaxxuy")
     
-    result = InlineQueryResultArticle(
-        id="1",  
-        title="ответ узбекгпт",
-        description=text,
-        input_message_content=InputTextMessageContent(
-            message_text=text
-        ),
-        
-    )
+    result = [
+        InlineQueryResultArticle(
+            title="генерация",
+            description="нажми сюда чтоб узбэкгпт начал думат✅",
+            input_message_content=InputTextMessageContent(message_text="узбэкгпт думат✅✅"),
+            reply_markup=InlineKeyboardMarkup([[button]]),
+            id="1"
+        )
+    ]
     
     await inline_query.answer(
-        results=[result],
-        cache_time=300,
-        is_personal=True
+        results=result, cache_time=0
     )
+
+@app.on_chosen_inline_result()
+async def chosen_inline_result(client, chosen_result: ChosenInlineResult):
+    inline_message_id = chosen_result.inline_message_id
+    if inline_message_id:
+        result = await generate(chosen_result.query[:MAX_PROMPT], chosen_result.from_user.id)
+        await app.edit_inline_text(inline_message_id, result)
 
 @app.on_message(filters.document)
 async def handle_content(client, message):
