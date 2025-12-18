@@ -208,16 +208,22 @@ async def clear_handler(client: Client, message: Message):
 @app.on_message(filters.text)
 async def text_handler(client, message):
     if message.sender_chat:
+        chat_type = message.sender_chat.type
         user_id = message.sender_chat.id
     else:
+        chat_type = "gandon"
         user_id = message.from_user.id
-        
-    if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:        
+    
+    if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP, ChatType.CHANNEL]:        
         me = await client.get_me()
         is_reply_to_bot = (message.reply_to_message and message.reply_to_message.from_user and message.reply_to_message.from_user.is_bot)
         mentions_bot = me.username in message.text
         has_uzbek = "узбек" in message.text.lower()
-        if not (is_reply_to_bot or mentions_bot or has_uzbek):
+        if ChatType.CHANNEL == chat_type:
+            is_channel = True
+        else:
+            is_channel = False
+        if not (is_reply_to_bot or mentions_bot or has_uzbek or is_channel):
             return
 
     replied = message.reply_to_message
