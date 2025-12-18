@@ -216,7 +216,12 @@ async def text_handler(client, message):
     
     if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP, ChatType.CHANNEL]:        
         me = await client.get_me()
-        is_reply_to_bot = (message.reply_to_message and message.reply_to_message.from_user and message.reply_to_message.from_user.is_bot)
+        is_reply_to_bot = (
+            message.reply_to_message 
+            and message.reply_to_message.from_user 
+            and message.reply_to_message.from_user.is_bot
+            and message.reply_to_message.from_user.username == me.username
+        )
         mentions_bot = me.username in message.text
         has_uzbek = "узбек" in message.text.lower()
         if ChatType.CHANNEL == chat_type:
