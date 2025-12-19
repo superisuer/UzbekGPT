@@ -18,6 +18,7 @@ from logs import info, warn, error
 from dotenv import load_dotenv
 
 import asyncio
+import shelve
 import sys
 import os
 import re
@@ -50,8 +51,6 @@ app = Client(
 )
 
 user_contexts = {}
-
-import shelve
 
 def set_user_model(user_id, model_name):
     with shelve.open('models_db') as db:
@@ -224,10 +223,7 @@ async def text_handler(client, message):
         )
         mentions_bot = me.username in message.text
         has_uzbek = "узбек" in message.text.lower()
-        if ChatType.CHANNEL == chat_type:
-            is_channel = True
-        else:
-            is_channel = False
+        is_channel = ChatType.CHANNEL == chat_type and message.views
         if not (is_reply_to_bot or mentions_bot or has_uzbek or is_channel):
             return
 
@@ -241,7 +237,7 @@ async def text_handler(client, message):
         prompt = f"<файл>{file_content}</файл>{message.text}"
     elif replied and replied.text:
         replied_text = message.reply_to_message.text
-        prompt = f"<цитата>{replied_text}</цитата>{message.text}"
+        prompt = f"<ответ на>{replied_text}</ответ на>{message.text}"
     else:
         prompt = message.text
         
