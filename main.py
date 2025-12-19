@@ -201,10 +201,8 @@ async def model_handler(client: Client, message: Message):
         result = "⚡доступные модели:"
         if len(OLLAMA_MODELS) > 0:
             for i in OLLAMA_MODELS:
-                if model == i:
-                    result += f"\n✅ `{i}`"
-                else:
-                    result += f"\n– `{i}`"
+                result += f"\n• `{i}`"
+            result += f"\n\nвыбрано: `{model}`\nчтобы сменить модель отправь боту `/model название модели`"
         else:
             result += "_хуй тебе_"
     else:
