@@ -8,7 +8,8 @@ from pyrogram.types import (
     InputTextMessageContent,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
-    Message
+    Message,
+    User
 )
 
 from ollama import AsyncClient
@@ -51,6 +52,13 @@ app = Client(
 )
 
 user_contexts = {}
+me = None
+
+async def get_me(client) -> User:
+    global me
+    if me is None:
+        me = await client.get_me()
+    return me
 
 def set_user_model(user_id, model_name):
     with shelve.open('models_db') as db:
@@ -59,6 +67,37 @@ def set_user_model(user_id, model_name):
 def get_user_model(user_id):
     with shelve.open('models_db') as db:
         return db.get(str(user_id), OLLAMA_MODEL)
+
+async def generate_without_memory(prompt, user_id):
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + [{"role": "user", "content": prompt}]
+
+    task = asyncio.create_task( 
+        ollama_client.chat(
+            model=OLLAMA_MODEL,
+            messages=messages
+        )
+    )
+
+    try:
+        response = await asyncio.wait_for(task, timeout=50)
+    except asyncio.TimeoutError:
+        task.cancel()
+        warn("ЛЛМка не смогла ответить больше 50 секунд!!1!1")
+        return "⚠️к сожалению узбекгпт не придумал ответ за 50 секунд. отправьте сообщение ещё раз или очистите контекст командой /clear"
+    except Exception as e:
+        task.cancel()
+        error(e)
+        return "⚠️отказ! произошла ошибка при выполнении! контекст очищен"
+	    
+    text = response['message']['content']
+    
+    try:
+	    return text
+    except Forbidden as e:
+	    error(e)
+    except Exception as e:
+	    return "⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст."
+	    error(e)
 
 async def generate(prompt, user_id):
     if user_id not in user_contexts:
@@ -95,8 +134,6 @@ async def generate(prompt, user_id):
         user_contexts[user_id] = []
         return "⚠️отказ! произошла ошибка при выполнении! контекст очищен"
 	    
-	    
-    
     text = response['message']['content']
 	
     user_contexts[user_id].append({"role": "assistant", "content": text})
@@ -204,64 +241,54 @@ async def clear_handler(client: Client, message: Message):
         error(e)
         user_contexts[user_id] = []
 
-@app.on_message(filters.text)
+@app.on_message(filters.text | filters.photo | filters.video)
 async def text_handler(client, message):
-    if message.sender_chat:
-        chat_type = message.sender_chat.type
-        user_id = message.sender_chat.id
-    else:
-        chat_type = "gandon"
-        user_id = message.from_user.id
-    
+    chat_type = message.sender_chat.type if message.sender_chat else ""
+    user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
+
+    is_channel = ChatType.CHANNEL == chat_type and message.views
+    user_text = message.text or message.caption or ""
+
     if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP, ChatType.CHANNEL]:        
-        me = await client.get_me()
-        is_reply_to_bot = (
-            message.reply_to_message 
-            and message.reply_to_message.from_user 
-            and message.reply_to_message.from_user.is_bot
-            and message.reply_to_message.from_user.username == me.username
-        )
-        mentions_bot = me.username in message.text
-        has_uzbek = "узбек" in message.text.lower()
-        is_channel = ChatType.CHANNEL == chat_type and message.views
-        if not (is_reply_to_bot or mentions_bot or has_uzbek or is_channel):
-            return
+        if not is_channel:
+            me = await get_me(client)
+            is_reply_to_bot = (
+                message.reply_to_message 
+                and message.reply_to_message.from_user 
+                and message.reply_to_message.from_user.is_bot
+                and message.reply_to_message.from_user.username == me.username
+            )
+            mentions_bot = me.username in message.text
+            has_uzbek = "узбек" in message.text.lower()
+            if not (is_reply_to_bot or mentions_bot or has_uzbek):
+                return
 
     replied = message.reply_to_message
-    
     prompt = ""
     
     if replied and replied.document:
         file_bytes = await replied.download(in_memory=True)
-        file_content = file_bytes.getvalue().decode('utf-8', errors='ignore')
-        prompt = f"<файл>{file_content}</файл>{message.text}"
+        prompt = f"<файл>{file_bytes.getvalue().decode('utf-8', errors='ignore')}</файл>{user_text}"
     elif replied and replied.text:
         replied_text = message.reply_to_message.text
-        prompt = f"<ответ на>{replied_text}</ответ на>{message.text}"
+        prompt = f"ответ на сообщение: '{replied_text}'\n{user_text}"
     else:
-        prompt = message.text
-        
+        prompt = user_text
+    
     prompt = prompt[:MAX_PROMPT]
     
     try:
-        await client.send_chat_action(
-            chat_id=message.chat.id,
-            action=ChatAction.TYPING
-        )
+        await client.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
     except Forbidden as e:
         error(e)
-        user_contexts[user_id] = []
         return
-    except Exception as e:
-        await message.reply("⚠️ узбекгпт не смог ответить вам. он сбросил ваш контекст.")
-        error(e)
-        user_contexts[user_id] = []
-        return
-    
-    result = await generate(prompt, user_id)
+
+    if is_channel:
+        result = await generate_without_memory(prompt, user_id)
+    else:
+        result = await generate(prompt, user_id)
     
     await message.reply(result)
-        
 
 @app.on_inline_query()
 async def inline_handler(client, inline_query):
@@ -269,15 +296,25 @@ async def inline_handler(client, inline_query):
     
     button = InlineKeyboardButton(text="жди", callback_data="pasholnaxxuy")
     
-    result = [
-        InlineQueryResultArticle(
-            title="генерация",
-            description="нажми сюда чтоб узбэкгпт начал думат✅",
-            input_message_content=InputTextMessageContent(message_text="узбэкгпт думат✅✅"),
-            reply_markup=InlineKeyboardMarkup([[button]]),
-            id="1"
-        )
-    ]
+    if inline_query.query != "clear":
+        result = [
+            InlineQueryResultArticle(
+                title="генерация",
+                description="нажми сюда чтоб узбэкгпт начал думат✅",
+                input_message_content=InputTextMessageContent(message_text="узбэкгпт думат✅✅"),
+                reply_markup=InlineKeyboardMarkup([[button]]),
+                id="1"
+            )
+        ]
+    else:
+        result = [
+            InlineQueryResultArticle(
+                title="очистить контекст",
+                description="нажми сюда чтоб узбэкгпт прочистил свои мозги✅",
+                input_message_content=InputTextMessageContent(message_text="память успех очистка✅✅✅"),
+                id="1"
+            )
+        ]
     
     await inline_query.answer(
         results=result, cache_time=0
@@ -286,9 +323,13 @@ async def inline_handler(client, inline_query):
 @app.on_chosen_inline_result()
 async def chosen_inline_result(client, chosen_result: ChosenInlineResult):
     inline_message_id = chosen_result.inline_message_id
-    if inline_message_id:
-        result = await generate(chosen_result.query[:MAX_PROMPT], chosen_result.from_user.id)
-        await app.edit_inline_text(inline_message_id, result)
+    user_id = chosen_result.from_user.id
+    if chosen_result.query != "clear":
+        if inline_message_id:
+            result = await generate(chosen_result.query[:MAX_PROMPT], chosen_result.from_user.id)
+            await app.edit_inline_text(inline_message_id, result)
+    else:
+        user_contexts[user_id] = []
 
 @app.on_message(filters.document)
 async def handle_content(client, message):
