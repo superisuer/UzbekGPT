@@ -5,3 +5,4 @@ __pycache__/
 *.session
 *.session-*
 models_db
+images
