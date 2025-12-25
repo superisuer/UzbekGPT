@@ -5,6 +5,7 @@ import shelve
 import sys
 import os
 import re
+import io
 from typing import Optional, Union
 from io import BytesIO
 
@@ -286,11 +287,30 @@ async def text_handler(message: Message):
     prompt = ""
     
     if replied and replied.document:
-        file = await bot.download(replied.document)
-        with open(file, 'r', encoding='utf-8', errors='ignore') as f:
-            file_content = f.read()
-        os.remove(file)
-        prompt = f"<файл>{file_content}</файл>{user_text}"
+        if replied.document.file_size > 4096:
+            await message.reply("слишком много данных не хочу отвечать☝️☝️")
+            return
+
+        file_bytes = io.BytesIO()
+    
+        try:
+            await bot.download(
+                replied.document,
+                destination=file_bytes
+            )
+            file_bytes.seek(0)
+            file_content = file_bytes.read().decode('utf-8', errors='ignore')
+                
+            prompt = f"<файл>{file_content}</файл>{user_text}"
+            
+        except UnicodeDecodeError:
+            await message.reply("брат что это за каловый файл ты приложил☝️☝️")
+            return
+            
+        except Exception as e:
+            error(e)
+            await message.reply("ошибка произошла брат братик братишка☝️☝️")
+            return
     elif replied and replied.text:
         replied_text = message.reply_to_message.text
         prompt = f"ответ на сообщение: '{replied_text}'\n{user_text}"
@@ -364,15 +384,21 @@ async def chosen_inline_result_handler(chosen_result: ChosenInlineResult):
     else:
         user_contexts[user_id] = []
 
+import io
+
+import io
+
 @router.message(F.content_type == 'document')
 async def handle_content(message: Message):
+    # Проверяем отправителя
     if message.sender_chat:
         user_id = message.sender_chat.id
     else:
         user_id = message.from_user.id
 
+    # Проверка для групп/супергрупп
     if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:        
-        me_user = await get_me()
+        me_user = await bot.get_me()
         is_reply_to_bot = (
             message.reply_to_message 
             and message.reply_to_message.from_user 
@@ -386,11 +412,32 @@ async def handle_content(message: Message):
     prompt = ""
     
     if message.document:
-        file = await bot.download(message.document)
-        with open(file, 'r', encoding='utf-8', errors='ignore') as f:
-            file_content = f.read()
-        os.remove(file)
-        prompt = f"<файл>{file_content}</файл>"
+        if message.document.file_size > 4096:
+            await message.reply("слишком много данных не хочу отвечать☝️☝️")
+            return
+        
+        file_bytes = io.BytesIO()
+        
+        try:
+            await bot.download(
+                message.document,
+                destination=file_bytes
+            )
+
+            file_bytes.seek(0)
+            file_content = file_bytes.read().decode('utf-8', errors='ignore')
+            file_bytes.close()
+            
+            prompt = f"<файл>{file_content}</файл>"
+            
+        except UnicodeDecodeError:
+            await message.reply("брат что это за каловый файл ты приложил☝️☝️")
+            return
+            
+        except Exception as e:
+            error(e)
+            await message.reply("ошибка произошла брат братик братишка☝️☝️")
+            return
             
     if message.caption:        
         prompt = prompt + "\n" + message.caption
