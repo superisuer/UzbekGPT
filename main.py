@@ -100,8 +100,8 @@ async def generate(prompt, user_id):
     
     if user_id in last_command_time:
         time_diff = current_time - last_command_time[user_id]
-        if time_diff < 4:
-            return f"☝️☝️брат не нада так быстро тебе осталось {round(4 - time_diff, 2)} сек"
+        if time_diff < 3:
+            return f"☝️☝️брат не нада так быстро тебе осталось {round(3 - time_diff, 2)} сек"
 
     last_command_time[user_id] = current_time
 
