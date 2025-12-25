@@ -264,8 +264,8 @@ async def clear_handler(message: Message):
 async def text_handler(message: Message):
     chat_type = message.sender_chat.type if message.sender_chat else ""
     user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
-
-    is_channel = ChatType.CHANNEL == chat_type and message.views
+    print(message)
+    is_channel = ChatType.CHANNEL == chat_type and message.from_user and message.from_user.id == 777000
     user_text = message.text or message.caption or ""
 
     if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP, ChatType.CHANNEL]:        
