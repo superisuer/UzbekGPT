@@ -164,7 +164,7 @@ async def start_handler(message: Message):
 
     try:
         await message.reply(
-            "Привет, я УЗБекГПТ✅ готов помочь. Что ты хочешь сделать?✅",
+            "Привет, я УЗБекГПТ✅ готов помочь. Напиши любае сообщение или отправь файл чтоб я быстра ответил!1!1 Или нажми кнопку ниже чтоба посмотрет мои команды..",
             reply_markup=keyboard
         )
     except TelegramForbiddenError as e:
