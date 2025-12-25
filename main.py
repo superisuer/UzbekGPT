@@ -384,19 +384,13 @@ async def chosen_inline_result_handler(chosen_result: ChosenInlineResult):
     else:
         user_contexts[user_id] = []
 
-import io
-
-import io
-
 @router.message(F.content_type == 'document')
 async def handle_content(message: Message):
-    # Проверяем отправителя
     if message.sender_chat:
         user_id = message.sender_chat.id
     else:
         user_id = message.from_user.id
 
-    # Проверка для групп/супергрупп
     if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:        
         me_user = await bot.get_me()
         is_reply_to_bot = (
