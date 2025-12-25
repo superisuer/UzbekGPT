@@ -16,7 +16,7 @@ def unpacker():
                 with open(os.path.join("images", filename), 'wb') as out_f:
                     out_f.write(data)
 
-def generate_image(text, size=128):
+def generate_image(text, size=256):
     files = [f for f in os.listdir("images") if f.endswith(('.png', '.jpg', '.jpeg'))]
     if len(files) < 2:
         return None
@@ -37,21 +37,24 @@ def generate_image(text, size=128):
     for x in range(size):
         for y in range(size):
             r = random.random()
-            if r < 0.2:
+            if r < 0.3:
                 pix_res[x, y] = pix1[x, y]
-            elif r < 0.8:
-                rx = random.randint(0, size - 1)
-                ry = random.randint(0, size - 1)
+            elif r < 0.7:
+                if r < 0.6:
+                    rx = y
+                else:
+                    rx = x
+                ry = x
                 pix_res[x, y] = pix2[rx, ry]
             else:
                 rx1 = random.randint(0, size - 1)
                 ry1 = random.randint(0, size - 1)
-                rx2 = random.randint(0, size - 1)
+                rx2 = y
                 ry2 = random.randint(0, size - 1)
                 r1, g1, b1 = pix1[rx1, ry1]
                 r2, g2, b2 = pix2[rx2, ry2]
                 pix_res[x, y] = (
-                    (r1 + r2) // 110,
+                    (r1 + r2) // random.randint(1,100),
                     (g1 + g2) // 1,
                     (b1 + b2) // 2
                 )
