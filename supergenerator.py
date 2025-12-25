@@ -25,7 +25,16 @@ headers = {
     "X-API-Key": API_KEY
 }
 
+import random
 
+def galockinator(text):
+    for _ in range(random.randint(1,3)):
+        if random.random() < 0.3:
+            text += "☝️"
+        else:
+            text += "✅"
+    
+    return text
 
 def set_user_model(user_id, model_name):
     with shelve.open('models_db') as db:
@@ -125,7 +134,7 @@ async def generate(prompt, user_id):
             )
             
             result = response.json()
-            text = result["answer"]
+            text = galockinator(result["answer"])
         except Exception as e:
             user_contexts[user_id] = []
             return "⚠️ произошла ошибка. извините. ты можешь создать новый чат: /clear"
