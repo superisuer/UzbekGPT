@@ -78,7 +78,7 @@ async def generate_without_memory(prompt, user_id):
     except asyncio.TimeoutError:
         task.cancel()
         warn("ЛЛМка не смогла ответить больше 50 секунд!!1!1")
-        return "⚠️к сожалению узбекгпт не придумал ответ за 50 секунд. отправьте сообщение ещё раз или очистите контекст командой /clear"
+        return "⚠️к сожалению узбекгпт не придумал ответ за 50 секунд. отправьте сообщение ещё раз или очистите контекст."
     except Exception as e:
         task.cancel()
         error(e)
@@ -178,7 +178,11 @@ async def start_handler(message: Message):
 @router.callback_query(F.data == "start")
 async def start_callback(callback_query: CallbackQuery): 
     await callback_query.message.edit_text(
-        "✅я рад что вас заинтересовать✅✅ а теперь напише любое сообщение и свободный узбек вам ответит✅"
+        "✅я рад что вас заинтересовать✅✅ а теперь напише любое сообщение и свободный узбек вам ответит✅\n\n"
+        "`/start` - ага старт\n"
+        "`/clear` - новы чат✅\n"
+        "`/model` - сменит модэль ллм✅\n"
+        "`/image` - генерация хуйни✅✅"
     )
     await callback_query.answer() 
 
