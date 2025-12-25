@@ -15,6 +15,6 @@ SYSTEM_PROMPT = """
 
 MAX_CONTEXT = 5
 MAX_PROMPT = 2000
-OLLAMA_MODEL = "gemma3:4b-cloud"
+DEFAULT_MODEL = "gemma3:4b-cloud"
+MODELS = ["gemma3:12b-cloud", "gemma3:4b-cloud", "eblangpt"]
 OLLAMA_HOST = "http://localhost:11434"
-OLLAMA_MODELS = ["gemma3:12b-cloud", "gemma3:4b-cloud"]

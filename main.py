@@ -1,11 +1,9 @@
-import datetime
-import time
 import asyncio
-import shelve
 import sys
 import os
 import re
 import io
+
 from typing import Optional, Union
 from io import BytesIO
 
@@ -21,19 +19,17 @@ from aiogram.filters import Command
 from aiogram.exceptions import TelegramForbiddenError
 from aiogram.client.default import DefaultBotProperties
 
-from ollama import AsyncClient
-
 from uzbekimg import unpacker, generate_image
 
-from config import SYSTEM_PROMPT, MAX_CONTEXT, MAX_PROMPT, OLLAMA_HOST, OLLAMA_MODEL, OLLAMA_MODELS
+from config import SYSTEM_PROMPT, MAX_CONTEXT, MAX_PROMPT, OLLAMA_HOST, DEFAULT_MODEL, MODELS
 from logs import info, warn, error
 from dotenv import load_dotenv
+
+from supergenerator import *
 
 load_dotenv()
 
 unpacker()
-
-ollama_client = AsyncClient(host=OLLAMA_HOST)
 
 API_TOKEN = os.getenv("API_TOKEN")
 
@@ -46,8 +42,6 @@ dp = Dispatcher()
 router = Router()
 dp.include_router(router)
 
-last_command_time = {}
-user_contexts = {}
 me = None
 
 async def get_me() -> User:
@@ -55,97 +49,6 @@ async def get_me() -> User:
     if me is None:
         me = await bot.get_me()
     return me
-
-def set_user_model(user_id, model_name):
-    with shelve.open('models_db') as db:
-        db[str(user_id)] = model_name
-
-def get_user_model(user_id):
-    with shelve.open('models_db') as db:
-        return db.get(str(user_id), OLLAMA_MODEL)
-
-async def generate_without_memory(prompt, user_id):
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + [{"role": "user", "content": prompt}]
-
-    task = asyncio.create_task( 
-        ollama_client.chat(
-            model=OLLAMA_MODEL,
-            messages=messages
-        )
-    )
-
-    try:
-        response = await asyncio.wait_for(task, timeout=50)
-    except asyncio.TimeoutError:
-        task.cancel()
-        warn("ЛЛМка не смогла ответить больше 50 секунд!!1!1")
-        return "⚠️к сожалению узбекгпт не придумал ответ за 50 секунд. отправьте сообщение ещё раз или очистите контекст."
-    except Exception as e:
-        task.cancel()
-        error(e)
-        return "⚠️отказ! произошла ошибка при выполнении! контекст очищен"
-	    
-    text = response['message']['content']
-    
-    try:
-	    return text
-    except Exception as e:
-	    return "⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст."
-	    error(e)
-
-async def generate(prompt, user_id):
-    if user_id not in user_contexts:
-        user_contexts[user_id] = []
-    
-    current_time = time.time()
-    
-    if user_id in last_command_time:
-        time_diff = current_time - last_command_time[user_id]
-        if time_diff < 3:
-            return f"☝️☝️брат не нада так быстро тебе осталось {round(3 - time_diff, 2)} сек"
-
-    last_command_time[user_id] = current_time
-
-    if get_user_model(user_id) in OLLAMA_MODELS:
-        model = get_user_model(user_id)
-    else:
-        return f"модель `{get_user_model(user_id)}` теперь не доступна. посмотри доступные модели командой /model"
-        
-    user_contexts[user_id].append({"role": "user", "content": prompt})
-    user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
-
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + user_contexts[user_id]
-
-    task = asyncio.create_task(
-        ollama_client.chat(
-            model=model,
-            messages=messages
-        )
-    )
-
-    try:
-        response = await asyncio.wait_for(task, timeout=50)
-    except asyncio.TimeoutError:
-        task.cancel()
-        warn("ЛЛМка не смогла ответить больше 50 секунд!!1!1")
-        return "⚠️к сожалению узбекгпт не придумал ответ за 50 секунд. отправьте сообщение ещё раз или очистите контекст командой /clear"
-    except Exception as e:
-        task.cancel()
-        error(e)
-        user_contexts[user_id] = []
-        return "⚠️отказ! произошла ошибка при выполнении! контекст очищен"
-	    
-    text = response['message']['content']
-	
-    user_contexts[user_id].append({"role": "assistant", "content": text})
-    user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
-    
-    try:
-	    return text
-    except Exception as e:
-	    user_contexts[user_id] = []
-	    return "⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст."
-	    error(e)
 
 @router.message(Command("start"))
 async def start_handler(message: Message):
@@ -201,14 +104,14 @@ async def model_handler(message: Message):
     
     if len(args) == 1:
         result = "⚡доступные модели:"
-        if len(OLLAMA_MODELS) > 0:
-            for i in OLLAMA_MODELS:
+        if len(MODELS) > 0:
+            for i in MODELS:
                 result += f"\n• `{i}`"
             result += f"\n\nвыбрано: `{model}`\nчтобы сменить модель отправь боту `/model название модели`"
         else:
             result += "_хуй тебе_"
     else:
-        if args[1] in OLLAMA_MODELS:
+        if args[1] in MODELS:
             set_user_model(user_id, args[1])
             result = f"✅сменили тебе модель на `{args[1]}`"
         else:
