@@ -102,18 +102,21 @@ async def model_handler(message: Message):
     model = get_user_model(user_id)
     args = message.text.split()
     
-    MODELS = OLLAMA_MODELS + ONLYSQ_MODELS + EBLAN_MODELS
+    MODELS = UZBEKIUM_MODELS + OLLAMA_MODELS + ONLYSQ_MODELS + EBLAN_MODELS
 
     if len(args) == 1:
         result = "⚡доступные модели:"
         if len(MODELS) > 0:
-            result += "\nOllama:"
+            result += "\nсекрет:"
+            for i in UZBEKIUM_MODELS:
+                result += f"\n• `{i}`"
+            result += "\nоляма:"
             for i in OLLAMA_MODELS:
                 result += f"\n• `{i}`"
-            result += "\nOnlySQ:"
+            result += "\nтолькоSQ:"
             for i in ONLYSQ_MODELS:
                 result += f"\n• `{i}`"
-            result += "\nEblanGPT:"
+            result += "\nебланГПТ:"
             for i in EBLAN_MODELS:
                 result += f"\n• `{i}`"
             result += f"\n\nвыбрано: `{model}`\nчтобы сменить модель отправь боту `/model название модели`"

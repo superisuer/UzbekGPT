@@ -16,11 +16,15 @@ SYSTEM_PROMPT = """
 MAX_CONTEXT = 7
 MAX_PROMPT = 2000
 
-DEFAULT_MODEL = "gemma3:4b-cloud"
+DEFAULT_MODEL = "qwen-3-32b"
+
 OLLAMA_MODELS = ["gemma3:12b-cloud", "gemma3:4b-cloud"]
 
 # ONLYSQ_KEY=openai
-ONLYSQ_MODELS = ["llama-3-1-8b", "gemma-2-9b-it-fast", "qwen3-235b-a22b"]
+ONLYSQ_MODELS = ["qwen3-235b-a22b"]
 
 # EBLAN_KEY в .env
 EBLAN_MODELS = ["eblangpt"]
+
+# UZBEKIUM_KEY в .env
+UZBEKIUM_MODELS = ["qwen-3-32b", "gemini-2.0-flash-lite", "llama-3.3-70b"]

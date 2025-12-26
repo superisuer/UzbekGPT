@@ -17,15 +17,23 @@ load_dotenv()
 last_command_time = {}
 user_contexts = {}
 
+
+
+
 # EBLANGPT & ONLYSQ СЕКРЕТ КОНФИГ!! --------
 EBLAN_URL = "https://gpt.twgood.serv00.net"
 EBLAN_KEY = os.getenv("EBLAN_KEY")
 ONLYSQ_KEY = os.getenv("ONLYSQ_KEY")
+UZBEKIUM_KEY = os.getenv("UZBEKIUM_KEY")
 # ------------------------------------------
 
 EBLAN_HEADERS = {
     "Content-Type": "application/json",
     "X-API-Key": EBLAN_KEY
+}
+
+UZBEKIUM_HEADERS = {
+    "Authorization": UZBEKIUM_KEY
 }
 
 onlysq = AsyncOpenAI(
@@ -54,18 +62,89 @@ def get_user_model(user_id):
 
 async def generate_without_memory(prompt, user_id):
     messages = [{"role": "system", "content": SYSTEM_PROMPT}] + [{"role": "user", "content": prompt}]
+
+    model = DEFAULT_MODEL
+
+    if model in OLLAMA_MODELS:
+        model_provider = "ollama"
+    elif model in ONLYSQ_MODELS:
+        model_provider = "onlysq"
+    elif model in UZBEKIUM_MODELS:
+        model_provider = "uzbekium"
+    elif model in EBLAN_MODELS:
+        model_provider = "eblan"
+    else:
+        return f"модель `{model}` теперь не достурна"
+    
     try:
-        response = await ollama_client.chat(
-            model=model,
-            messages=messages,
-            think=False
-        )
+        if model_provider == "ollama":
+            try:
+                response = await ollama_client.chat(
+                    model=model,
+                    messages=messages,
+                    think=False
+                )
+    
+            except Exception as e:
+                task.cancel()
+                error(e)
+                user_contexts[user_id] = []
+                return f"⚠️ {e}"
+    
+            text = response['message']['content']
+    
+        elif model_provider == "eblan":
+            loop = asyncio.get_event_loop()
+            try:
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: requests.post(
+                        f"{EBLAN_URL}/v1/chat",
+                        headers=EBLAN_HEADERS,
+                        json={"message": prompt},
+                        timeout=10
+                    )
+                )
+    
+                result = response.json()
+                text = galockinator(result["answer"])
+            except Exception as e:
+                user_contexts[user_id] = []
+                error(e)
+                return f"⚠️ {e}"
+    
+        elif model_provider == "onlysq":
+            loop = asyncio.get_event_loop()
+            try:
+                completion = await onlysq.chat.completions.create(
+                    model=model,
+                    messages=messages
+                )
+    
+                text = completion.choices[0].message.content
+            except Exception as e:
+                user_contexts[user_id] = []
+                error(e)
+                return f"⚠️ {e}"
+    
+        elif model_provider == "uzbekium":
+            response = await loop.run_in_executor(
+                None,
+                lambda: requests.post(
+                    'https://caliumuzbekium.ddosxd.ru/chat/completions',
+                    headers=UZBEKIUM_HEADERS,
+                    json = {
+                        'model': model
+                        'messages': messages
+                    }
+                )
+            ).json()
+    
+            text = response['reply']
+            
     except Exception as e:
-        task.cancel()
-        error(e)
-        return "⚠️отказ! произошла ошибка при выполнении! контекст очищен"
- 
-    return response['message']['content']
+        return f"{e}" 
+    return text
 
 async def generate(prompt, user_id):
     if user_id not in user_contexts:
@@ -86,6 +165,8 @@ async def generate(prompt, user_id):
         model_provider = "ollama"
     elif model in ONLYSQ_MODELS:
         model_provider = "onlysq"
+    elif model in UZBEKIUM_MODELS:
+        model_provider = "uzbekium"
     elif model in EBLAN_MODELS:
         model_provider = "eblan"
     else:
@@ -95,8 +176,6 @@ async def generate(prompt, user_id):
     user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}] + user_contexts[user_id]
-
-    
 
     if model_provider == "ollama":
         try:
@@ -147,6 +226,23 @@ async def generate(prompt, user_id):
             user_contexts[user_id] = []
             error(e)
             return f"⚠️ {e}"
+            
+    elif model_provider == "uzbekium":
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: requests.post(
+                'https://caliumuzbekium.ddosxd.ru/chat/completions', 
+                headers=UZBEKIUM_HEADERS,
+                json = {
+                    'model': model,
+                    'messages': messages
+                }
+            )
+        ).json()
+
+        text = response['reply']
+        
 
     user_contexts[user_id].append({"role": "assistant", "content": text})
     user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
