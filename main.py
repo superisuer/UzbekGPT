@@ -21,8 +21,8 @@ from aiogram.client.default import DefaultBotProperties
 
 from uzbekimg import unpacker, generate_image
 
-from config import SYSTEM_PROMPT, MAX_CONTEXT, MAX_PROMPT, OLLAMA_HOST, DEFAULT_MODEL, MODELS
-from logs import info, warn, error
+from config import *
+from logs import *
 from dotenv import load_dotenv
 
 from supergenerator import *
@@ -37,7 +37,7 @@ if not API_TOKEN:
     error("API_TOKEN не установлен. Создайте бота в @BotFather и установите токен бота.")
     sys.exit(1)
 
-bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode="Markdown"))
+bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode="MarkdownV2"))
 dp = Dispatcher()
 router = Router()
 dp.include_router(router)
@@ -102,10 +102,19 @@ async def model_handler(message: Message):
     model = get_user_model(user_id)
     args = message.text.split()
     
+    MODELS = OLLAMA_MODELS + ONLYSQ_MODELS + EBLAN_MODELS
+
     if len(args) == 1:
         result = "⚡доступные модели:"
         if len(MODELS) > 0:
-            for i in MODELS:
+            result += "\nOllama:"
+            for i in OLLAMA_MODELS:
+                result += f"\n• `{i}`"
+            result += "\nOnlySQ:"
+            for i in ONLYSQ_MODELS:
+                result += f"\n• `{i}`"
+            result += "\nEblanGPT:"
+            for i in EBLAN_MODELS:
                 result += f"\n• `{i}`"
             result += f"\n\nвыбрано: `{model}`\nчтобы сменить модель отправь боту `/model название модели`"
         else:
@@ -232,8 +241,13 @@ async def text_handler(message: Message):
         result = await generate_without_memory(prompt, user_id)
     else:
         result = await generate(prompt, user_id)
-    
-    await message.reply(result, parse_mode="Markdown")
+    def escape_markdown(text: str) -> str: # ыолрыволароцущ рпцуклпцуаущйцхалжуцо айуощмйуаозшуцоща з
+        # цушпзщх
+        # цкуопзщркуопрз
+        # ъцкшзщрп цкшзпцщзп кцузщшп рцкузщш ощзхцыувапцузщхоеп лщзукцр полукор упр оулцкр окщзупр ощзкцуор 
+        escape_chars = r'\[]()>#+-=|{}.!'
+        return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
+    await message.reply(escape_markdown(result), parse_mode="MarkdownV2")
 
 @router.inline_query()
 async def inline_handler(inline_query: InlineQuery):
@@ -282,7 +296,7 @@ async def chosen_inline_result_handler(chosen_result: ChosenInlineResult):
             await bot.edit_message_text(
                 text=result,
                 inline_message_id=inline_message_id, 
-                parse_mode="Markdown"
+                parse_mode="MarkdownV2"
             )
     else:
         user_contexts[user_id] = []

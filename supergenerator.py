@@ -1,31 +1,39 @@
 import requests
 import asyncio
 import shelve
+import random
 import time
-import logs
+import json
 import os
 
+from logs import *
+from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from ollama import AsyncClient
 from config import *
 
 load_dotenv()
 
-ollama_client = AsyncClient(host=OLLAMA_HOST)
 last_command_time = {}
 user_contexts = {}
 
-# EBLANGPT СЕКРЕТ КОНФИГ!! -----------------
+# EBLANGPT & ONLYSQ СЕКРЕТ КОНФИГ!! --------
 EBLAN_URL = "https://gpt.twgood.serv00.net"
-API_KEY = os.getenv("EBLAN_KEY")
+EBLAN_KEY = os.getenv("EBLAN_KEY")
+ONLYSQ_KEY = os.getenv("ONLYSQ_KEY")
 # ------------------------------------------
 
-headers = {
+EBLAN_HEADERS = {
     "Content-Type": "application/json",
-    "X-API-Key": API_KEY
+    "X-API-Key": EBLAN_KEY
 }
 
-import random
+onlysq = AsyncOpenAI(
+    base_url="https://api.onlysq.ru/ai/openai",
+    api_key=ONLYSQ_KEY,
+)
+
+ollama_client = AsyncClient()
 
 def galockinator(text):
     for _ in range(random.randint(1,3)):
@@ -46,33 +54,18 @@ def get_user_model(user_id):
 
 async def generate_without_memory(prompt, user_id):
     messages = [{"role": "system", "content": SYSTEM_PROMPT}] + [{"role": "user", "content": prompt}]
-
-    task = asyncio.create_task(
-        ollama_client.chat(
-            model=DEFAULT_MODEL,
+    try:
+        response = await ollama_client.chat(
+            model=model,
             messages=messages,
             think=False
         )
-    )
-
-    try:
-        response = await asyncio.wait_for(task, timeout=30)
-    except asyncio.TimeoutError:
-        task.cancel()
-        warn("ЛЛМка не смогла ответить больше 30 секунд!!1!1")
-        return "⚠️узбекгпт не придумал ответ за 30 секунд :("
     except Exception as e:
         task.cancel()
         error(e)
         return "⚠️отказ! произошла ошибка при выполнении! контекст очищен"
-	    
-    text = response['message']['content']
-    
-    try:
-	    return text
-    except Exception as e:
-	    return "⚠️ узбекгпт не смог ответить вам. мы сбросили ваш контекст."
-	    error(e)
+ 
+    return response['message']['content']
 
 async def generate(prompt, user_id):
     if user_id not in user_contexts:
@@ -87,8 +80,14 @@ async def generate(prompt, user_id):
 
     last_command_time[user_id] = current_time
 
-    if get_user_model(user_id) in MODELS:
-        model = get_user_model(user_id)
+    model = get_user_model(user_id)
+
+    if model in OLLAMA_MODELS:
+        model_provider = "ollama"
+    elif model in ONLYSQ_MODELS:
+        model_provider = "onlysq"
+    elif model in EBLAN_MODELS:
+        model_provider = "eblan"
     else:
         return f"модель `{get_user_model(user_id)}` теперь не доступна. посмотри доступные модели командой /model"
         
@@ -97,39 +96,34 @@ async def generate(prompt, user_id):
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}] + user_contexts[user_id]
 
-    if model != "eblangpt":
-        # через ollama запуск ага
+    
 
-        task = asyncio.create_task(
-            ollama_client.chat(
+    if model_provider == "ollama":
+        try:
+            response = await ollama_client.chat(
                 model=model,
                 messages=messages,
                 think=False
             )
-        )
 
-        try:
-            response = await asyncio.wait_for(task, timeout=15)
         except Exception as e:
             task.cancel()
             error(e)
             user_contexts[user_id] = []
-            return "⚠️произошла ошибка. извините. ты можешь создать новый чат: /clear"
+            return f"⚠️ {e}"
             
         text = response['message']['content']
-    else:
-        # через специальный секрет апи еблангпт
 
+    elif model_provider == "eblan":
         loop = asyncio.get_event_loop()
-
         try:
             response = await loop.run_in_executor(
                 None,
                 lambda: requests.post(
                     f"{EBLAN_URL}/v1/chat",
-                    headers=headers,
+                    headers=EBLAN_HEADERS,
                     json={"message": prompt},
-                    timeout=5
+                    timeout=10
                 )
             )
             
@@ -137,9 +131,27 @@ async def generate(prompt, user_id):
             text = galockinator(result["answer"])
         except Exception as e:
             user_contexts[user_id] = []
-            return "⚠️ произошла ошибка. извините. ты можешь создать новый чат: /clear"
-        
+            error(e)
+            return f"⚠️ {e}"
+
+    elif model_provider == "onlysq":
+        loop = asyncio.get_event_loop()
+        try:   
+            print(messages)
+            completion = await onlysq.chat.completions.create(
+                model=model,
+                messages=messages
+            )
+            
+            text = completion.choices[0].message.content
+        except Exception as e:
+            user_contexts[user_id] = []
+            error(e)
+            return f"⚠️ {e}"
+
     user_contexts[user_id].append({"role": "assistant", "content": text})
     user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
     
+    print(text)
+
     return text

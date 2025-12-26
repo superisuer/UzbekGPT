@@ -13,8 +13,14 @@ SYSTEM_PROMPT = """
 Не ставь знаки препинания в ответе и отвечай с маленькой буквы.
 """
 
-MAX_CONTEXT = 5
+MAX_CONTEXT = 7
 MAX_PROMPT = 2000
+
 DEFAULT_MODEL = "gemma3:4b-cloud"
-MODELS = ["gemma3:12b-cloud", "gemma3:4b-cloud", "eblangpt"]
-OLLAMA_HOST = "http://localhost:11434"
+OLLAMA_MODELS = ["gemma3:12b-cloud", "gemma3:4b-cloud"]
+
+# ONLYSQ_KEY=openai
+ONLYSQ_MODELS = ["llama-3-1-8b", "gemma-2-9b-it-fast", "qwen3-235b-a22b"]
+
+# EBLAN_KEY в .env
+EBLAN_MODELS = ["eblangpt"]
