@@ -137,7 +137,6 @@ async def generate(prompt, user_id):
     elif model_provider == "onlysq":
         loop = asyncio.get_event_loop()
         try:   
-            print(messages)
             completion = await onlysq.chat.completions.create(
                 model=model,
                 messages=messages
@@ -151,7 +150,5 @@ async def generate(prompt, user_id):
 
     user_contexts[user_id].append({"role": "assistant", "content": text})
     user_contexts[user_id] = user_contexts[user_id][-MAX_CONTEXT:]
-    
-    print(text)
 
     return text
