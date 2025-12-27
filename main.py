@@ -244,13 +244,16 @@ async def text_handler(message: Message):
         result = await generate_without_memory(prompt, user_id)
     else:
         result = await generate(prompt, user_id)
-    def escape_markdown(text: str) -> str: # ыолрыволароцущ рпцуклпцуаущйцхалжуцо айуощмйуаозшуцоща з
-        # цушпзщх
-        # цкуопзщркуопрз
-        # ъцкшзщрп цкшзпцщзп кцузщшп рцкузщш ощзхцыувапцузщхоеп лщзукцр полукор упр оулцкр окщзупр ощзкцуор 
+
+    def escape_markdown(text: str) -> str:
         escape_chars = r'\[]()>#+-=|{}.!'
         return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
-    await message.reply(escape_markdown(result), parse_mode="MarkdownV2")
+
+    try:
+        await message.reply(escape_markdown(result), parse_mode="MarkdownV2")
+    except Exception as e:
+        warn(e)
+        await message.reply(result, parse_mode=None)
 
 @router.inline_query()
 async def inline_handler(inline_query: InlineQuery):

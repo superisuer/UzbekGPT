@@ -5,6 +5,7 @@ import random
 import time
 import json
 import os
+import re
 
 from logs import *
 from openai import AsyncOpenAI
@@ -51,6 +52,10 @@ def galockinator(text):
             text += "✅"
     
     return text
+
+def remove_think_tags(text):
+    result = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    return result
 
 def set_user_model(user_id, model_name):
     with shelve.open('models_db') as db:
@@ -134,13 +139,13 @@ async def generate_without_memory(prompt, user_id):
                     'https://caliumuzbekium.ddosxd.ru/chat/completions',
                     headers=UZBEKIUM_HEADERS,
                     json = {
-                        'model': model
+                        'model': model,
                         'messages': messages
                     }
                 )
-            ).json()
+            )
     
-            text = response['reply']
+            text = response.json()['reply']
             
     except Exception as e:
         return f"{e}" 
@@ -239,9 +244,9 @@ async def generate(prompt, user_id):
                     'messages': messages
                 }
             )
-        ).json()
+        )
 
-        text = response['reply']
+        text = remove_think_tags(response.json()['reply'])
         
 
     user_contexts[user_id].append({"role": "assistant", "content": text})
