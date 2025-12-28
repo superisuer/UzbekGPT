@@ -133,6 +133,7 @@ async def generate_without_memory(prompt, user_id):
                 return f"⚠️ {e}"
     
         elif model_provider == "uzbekium":
+            loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
                 None,
                 lambda: requests.post(
@@ -145,7 +146,7 @@ async def generate_without_memory(prompt, user_id):
                 )
             )
     
-            text = response.json()['reply']
+            text = remove_think_tags(response.json()['reply'])
             
     except Exception as e:
         return f"{e}" 

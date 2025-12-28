@@ -301,8 +301,7 @@ async def chosen_inline_result_handler(chosen_result: ChosenInlineResult):
             result = await generate(chosen_result.query[:MAX_PROMPT], chosen_result.from_user.id)
             await bot.edit_message_text(
                 text=result,
-                inline_message_id=inline_message_id, 
-                parse_mode="MarkdownV2"
+                inline_message_id=inline_message_id
             )
     else:
         user_contexts[user_id] = []
